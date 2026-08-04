@@ -1,5 +1,6 @@
 package com.example.url_shortener.security;
 
+import com.example.url_shortener.ratelimit.RateLimitingFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,7 @@ public class SecurityConfig {
 
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitingFilter rateLimitingFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -51,7 +53,8 @@ public class SecurityConfig {
                         .requestMatchers("/error", "/api/auth/register", "/api/auth/login", "/r/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(rateLimitingFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 }
