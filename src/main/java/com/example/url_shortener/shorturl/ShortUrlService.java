@@ -49,7 +49,7 @@ public class ShortUrlService {
     }
 
     @Transactional
-    public String resolve(String shortCode) {
+    public RedirectResult resolve(String shortCode) {
         ShortUrl shortUrl = shortUrlRepository.findByShortCode(shortCode)
                 .orElseThrow(() -> new ShortUrlNotFoundException(shortCode));
 
@@ -58,7 +58,7 @@ public class ShortUrlService {
         }
 
         shortUrl.setClickCount(shortUrl.getClickCount() + 1);
-        return shortUrl.getOriginalUrl();
+        return new RedirectResult(shortUrl.getId(), shortUrl.getOriginalUrl());
     }
 
     @Transactional(readOnly = true)
@@ -93,7 +93,7 @@ public class ShortUrlService {
         shortUrlRepository.delete(getOwned(id, ownerId));
     }
 
-    private ShortUrl getOwned(Long id, Long ownerId) {
+    ShortUrl getOwned(Long id, Long ownerId) {
         ShortUrl shortUrl = shortUrlRepository.findById(id)
                 .orElseThrow(() -> new ShortUrlNotFoundException(id));
         if (!shortUrl.getOwner().getId().equals(ownerId)) {

@@ -1,6 +1,7 @@
 package com.example.url_shortener.shorturl;
 
 import com.example.url_shortener.security.UserPrincipal;
+import com.example.url_shortener.shorturl.dto.AnalyticsResponse;
 import com.example.url_shortener.shorturl.dto.CreateShortUrlRequest;
 import com.example.url_shortener.shorturl.dto.ShortUrlResponse;
 import com.example.url_shortener.shorturl.dto.UpdateShortUrlRequest;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ShortUrlController {
 
     private final ShortUrlService shortUrlService;
+    private final ClickAnalyticsService clickAnalyticsService;
 
     @PostMapping
     public ResponseEntity<ShortUrlResponse> create(
@@ -60,5 +62,11 @@ public class ShortUrlController {
     public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         shortUrlService.delete(id, principal.getId());
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/analytics")
+    public ResponseEntity<AnalyticsResponse> analytics(
+            @PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(clickAnalyticsService.getAnalytics(id, principal.getId()));
     }
 }
