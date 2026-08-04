@@ -5,11 +5,14 @@ import com.example.url_shortener.common.exception.ShortUrlExpiredException;
 import com.example.url_shortener.common.exception.ShortUrlNotFoundException;
 import com.example.url_shortener.shorturl.dto.CreateShortUrlRequest;
 import com.example.url_shortener.shorturl.dto.ShortUrlResponse;
+import com.example.url_shortener.shorturl.dto.UpdateShortUrlRequest;
 import com.example.url_shortener.user.UserRepository;
 import java.security.SecureRandom;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +59,47 @@ public class ShortUrlService {
 
         shortUrl.setClickCount(shortUrl.getClickCount() + 1);
         return shortUrl.getOriginalUrl();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ShortUrlResponse> listForOwner(Long ownerId, Pageable pageable) {
+        return shortUrlRepository.findByOwnerId(ownerId, pageable).map(this::toResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public ShortUrlResponse getForOwner(Long id, Long ownerId) {
+        return toResponse(getOwned(id, ownerId));
+    }
+
+    @Transactional
+    public ShortUrlResponse update(Long id, Long ownerId, UpdateShortUrlRequest request) {
+        ShortUrl shortUrl = getOwned(id, ownerId);
+
+        if (request.originalUrl() != null) {
+            shortUrl.setOriginalUrl(request.originalUrl());
+        }
+        if (request.expiresAt() != null) {
+            shortUrl.setExpiresAt(request.expiresAt());
+        }
+        if (request.active() != null) {
+            shortUrl.setActive(request.active());
+        }
+
+        return toResponse(shortUrl);
+    }
+
+    @Transactional
+    public void delete(Long id, Long ownerId) {
+        shortUrlRepository.delete(getOwned(id, ownerId));
+    }
+
+    private ShortUrl getOwned(Long id, Long ownerId) {
+        ShortUrl shortUrl = shortUrlRepository.findById(id)
+                .orElseThrow(() -> new ShortUrlNotFoundException(id));
+        if (!shortUrl.getOwner().getId().equals(ownerId)) {
+            throw new ShortUrlNotFoundException(id);
+        }
+        return shortUrl;
     }
 
     private String claimCustomAlias(String alias) {
