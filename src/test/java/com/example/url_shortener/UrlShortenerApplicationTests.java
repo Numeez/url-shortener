@@ -21,6 +21,6 @@ class UrlShortenerApplicationTests extends AbstractIntegrationTest {
     void flywayMigrationsHaveRun() {
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(count).isEqualTo(3);
+        assertThat(count).isEqualTo(4);
     }
 }
