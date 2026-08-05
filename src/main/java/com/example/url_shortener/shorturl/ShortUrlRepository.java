@@ -19,4 +19,11 @@ public interface ShortUrlRepository extends JpaRepository<ShortUrl, Long> {
     @Modifying
     @Query("UPDATE ShortUrl s SET s.clickCount = s.clickCount + 1 WHERE s.id = :id")
     void incrementClickCount(@Param("id") Long id);
+
+    long countByActiveTrue();
+
+    @Query("SELECT COALESCE(SUM(s.clickCount), 0) FROM ShortUrl s")
+    long sumClickCount();
+
+    Page<ShortUrl> findAllByOrderByClickCountDesc(Pageable pageable);
 }
