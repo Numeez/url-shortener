@@ -27,6 +27,7 @@ public class ShortUrlService {
 
     private final ShortUrlRepository shortUrlRepository;
     private final UserRepository userRepository;
+    private final ShortUrlCacheService shortUrlCacheService;
 
     @Value("${app.base-url}")
     private String baseUrl;
@@ -50,15 +51,30 @@ public class ShortUrlService {
 
     @Transactional
     public RedirectResult resolve(String shortCode) {
+        CachedShortUrl cached = shortUrlCacheService.get(shortCode);
+        if (cached != null) {
+            if (!cached.active() || isExpired(cached.expiresAt())) {
+                throw new ShortUrlExpiredException(shortCode);
+            }
+            shortUrlRepository.incrementClickCount(cached.shortUrlId());
+            return new RedirectResult(cached.shortUrlId(), cached.originalUrl());
+        }
+
         ShortUrl shortUrl = shortUrlRepository.findByShortCode(shortCode)
                 .orElseThrow(() -> new ShortUrlNotFoundException(shortCode));
 
-        if (!shortUrl.isActive() || (shortUrl.getExpiresAt() != null && shortUrl.getExpiresAt().isBefore(Instant.now()))) {
+        if (!shortUrl.isActive() || isExpired(shortUrl.getExpiresAt())) {
             throw new ShortUrlExpiredException(shortCode);
         }
 
+        shortUrlCacheService.put(shortCode, new CachedShortUrl(
+                shortUrl.getId(), shortUrl.getOriginalUrl(), shortUrl.isActive(), shortUrl.getExpiresAt()));
         shortUrl.setClickCount(shortUrl.getClickCount() + 1);
         return new RedirectResult(shortUrl.getId(), shortUrl.getOriginalUrl());
+    }
+
+    private boolean isExpired(Instant expiresAt) {
+        return expiresAt != null && expiresAt.isBefore(Instant.now());
     }
 
     @Transactional(readOnly = true)
@@ -85,12 +101,15 @@ public class ShortUrlService {
             shortUrl.setActive(request.active());
         }
 
+        shortUrlCacheService.evict(shortUrl.getShortCode());
         return toResponse(shortUrl);
     }
 
     @Transactional
     public void delete(Long id, Long ownerId) {
-        shortUrlRepository.delete(getOwned(id, ownerId));
+        ShortUrl shortUrl = getOwned(id, ownerId);
+        shortUrlCacheService.evict(shortUrl.getShortCode());
+        shortUrlRepository.delete(shortUrl);
     }
 
     ShortUrl getOwned(Long id, Long ownerId) {
