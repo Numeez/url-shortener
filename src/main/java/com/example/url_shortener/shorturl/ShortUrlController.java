@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -27,8 +29,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ShortUrlController {
 
+    private static final int MIN_QR_SIZE = 100;
+    private static final int MAX_QR_SIZE = 1000;
+
     private final ShortUrlService shortUrlService;
     private final ClickAnalyticsService clickAnalyticsService;
+    private final QrCodeService qrCodeService;
 
     @PostMapping
     public ResponseEntity<ShortUrlResponse> create(
@@ -68,5 +74,16 @@ public class ShortUrlController {
     public ResponseEntity<AnalyticsResponse> analytics(
             @PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(clickAnalyticsService.getAnalytics(id, principal.getId()));
+    }
+
+    @GetMapping(value = "/{id}/qrcode", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> qrCode(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "300") int size,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        ShortUrlResponse shortUrl = shortUrlService.getForOwner(id, principal.getId());
+        int clampedSize = Math.clamp(size, MIN_QR_SIZE, MAX_QR_SIZE);
+        byte[] png = qrCodeService.generatePng(shortUrl.shortUrl(), clampedSize);
+        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(png);
     }
 }
