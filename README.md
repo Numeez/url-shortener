@@ -49,25 +49,28 @@ cp .env.example .env
 
 Edit `.env` as needed. At minimum, set a real `JWT_SECRET` (a base64-encoded 256-bit key, e.g. `openssl rand -base64 32`) for anything beyond local experimentation — the app falls back to a built-in default secret if unset, which is fine for local dev only.
 
-### 2. Start Postgres + Redis
+### 2. Start the full stack (app + Postgres + Redis)
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-This starts Postgres on `localhost:5434` (not 5432 — see note below) and Redis on `localhost:6379`.
+This builds the app image and starts all three services: Postgres on `localhost:5434` (not 5432 — see note below), Redis on `localhost:6379`, and the app on `localhost:8080`. The app waits for Postgres and Redis to report healthy before starting, and Flyway applies all pending migrations automatically on boot.
 
 > **Why port 5434?** The default Postgres port is remapped to avoid clashing with a locally installed Postgres. Override via `POSTGRES_PORT` in `.env` if needed.
 
-### 3. Run the app
+Re-run `docker compose up -d --build` after code changes to rebuild the app image.
+
+#### Alternative: run the app from source, infra from Docker
+
+For faster edit/run cycles during development, run only Postgres and Redis in Docker and the app via Maven on the host:
 
 ```bash
+docker compose up -d postgres redis
 ./mvnw spring-boot:run
 ```
 
-Flyway applies all pending migrations automatically on startup. The API is now available at `http://localhost:8080`.
-
-### 4. Explore the API
+### 3. Explore the API
 
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 - OpenAPI spec: `http://localhost:8080/v3/api-docs`
@@ -150,6 +153,7 @@ All configuration is environment-variable driven (see `.env.example`); sensible 
 |---|---|---|
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_PORT` | `url_shortener` / `url_shortener` / `change-me` / `5434` | Docker Compose Postgres |
 | `REDIS_PORT` | `6379` | Docker Compose Redis |
+| `APP_PORT` | `8080` | Host port the `app` container is published on |
 | `JWT_SECRET` | *(dev default, insecure)* | Base64 256-bit signing key for JWTs |
 | `JWT_EXPIRATION_MS` | `86400000` (24h) | JWT token lifetime |
 | `APP_BASE_URL` | `http://localhost:8080` | Base URL used when building short URLs |
@@ -175,8 +179,12 @@ src/main/java/com/example/url_shortener/
 
 Tests mirror this package structure under `src/test/java`, split into fast Mockito unit tests (`*Test.java`) and Testcontainers-backed integration tests (`*IT.java`) that exercise real Postgres, Redis, and the full Spring context via MockMvc.
 
+## Docker
+
+The app ships with a multi-stage `Dockerfile`: a Maven build stage, a layer-extraction stage (splits the fat jar into `dependencies` / `spring-boot-loader` / `snapshot-dependencies` / `application` layers for better rebuild caching), and a minimal `eclipse-temurin` JRE Alpine runtime image that runs as a non-root user and exposes a container-level `HEALTHCHECK` against `/actuator/health`.
+
+`docker-compose.yml` wires the built image together with Postgres and Redis: the `app` service waits for both dependencies to report healthy before starting, and picks up its datasource/Redis/JWT/admin-bootstrap configuration from the same `.env` file used by the Postgres/Redis services. See [Getting Started](#getting-started) above.
+
 ## Roadmap
 
 - [ ] Remaining test coverage: click analytics, QR codes, rate limiting, admin
-- [ ] Dockerize the Spring Boot app itself
-- [ ] Full `docker-compose` stack (app + Postgres + Redis in one command)
